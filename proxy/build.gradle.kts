@@ -1,8 +1,10 @@
 import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
+import com.google.protobuf.gradle.id
 
 plugins {
     application
     id("velocity-init-manifest")
+    id("com.google.protobuf") version "0.9.4"
     alias(libs.plugins.shadow)
 }
 
@@ -26,6 +28,8 @@ tasks {
 
     shadowJar {
         transform(Log4j2PluginsCacheFileTransformer::class.java)
+
+        mergeServiceFiles()
 
         // Exclude all the collection types we don"t intend to use
         exclude("it/unimi/dsi/fastutil/booleans/**")
@@ -94,6 +98,10 @@ tasks {
     }
 }
 
+val grpcVersion = "1.63.0"
+val protocVersion = "3.25.1"
+val scalaVersion = "2.11.12"
+
 dependencies {
     implementation(project(":velocity-api"))
     implementation(project(":velocity-native"))
@@ -111,6 +119,16 @@ dependencies {
     implementation(libs.netty.transport.native.kqueue)
     implementation(variantOf(libs.netty.transport.native.kqueue) { classifier("osx-x86_64") })
     implementation(variantOf(libs.netty.transport.native.kqueue) { classifier("osx-aarch_64") })
+
+    implementation("redis.clients:jedis:4.4.3")
+    implementation("com.google.guava:guava:33.0.0-jre")
+    implementation("javax.annotation:javax.annotation-api:1.3.1")
+    implementation("io.grpc:grpc-netty-shaded:$grpcVersion")
+    implementation("org.scala-lang:scala-library:${scalaVersion}")
+    implementation("io.grpc:grpc-protobuf:$grpcVersion")
+    implementation("io.grpc:grpc-stub:$grpcVersion")
+    implementation("io.grpc:grpc-auth:$grpcVersion")
+
 
     implementation(libs.jopt)
     implementation(libs.terminalconsoleappender)
@@ -131,4 +149,26 @@ dependencies {
     testImplementation(libs.mockito)
 
     annotationProcessor(libs.auto.service)
+}
+
+protobuf {
+    protoc { artifact = "com.google.protobuf:protoc:$protocVersion" }
+    plugins {
+        id("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion" }
+    }
+    generateProtoTasks {
+        all().forEach {
+            it.plugins {
+                id("grpc")
+            }
+        }
+    }
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDirs("src/main/proto")
+        }
+    }
 }
