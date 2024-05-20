@@ -695,7 +695,7 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       if (!(serverName.startsWith("spawn") || serverName.startsWith("mining"))) {
         try {
           GetWarpSrvResp spawn = inf.getWarpSrv(GetWarpSrvReq.newBuilder().setSender("").setName("spawn").build()).get();
-          boolean init = cmds.tp(TpReq.newBuilder()
+          boolean err = cmds.tp(TpReq.newBuilder()
               .setSender(this.getGameProfile().getId().toString())
               .setMachine(spawn.getMachine())
               .setCords(spawn.getCords())
@@ -704,9 +704,9 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
               .setYaw(spawn.getYaw())
               .setWorldMost(spawn.getWorldMost())
               .setWorldLeast(spawn.getWorldLeast())
-              .build()).get().isInitialized();
+              .build()).get().getError();
 
-          if (init) {
+          if (err) {
             logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
                 plainTextReason);
             handleConnectionException(server, disconnectReason,
