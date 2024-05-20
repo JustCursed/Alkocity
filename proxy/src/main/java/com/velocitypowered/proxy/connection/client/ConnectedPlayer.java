@@ -101,6 +101,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import net.kyori.adventure.audience.MessageType;
 import net.kyori.adventure.bossbar.BossBar;
@@ -124,6 +125,12 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.NotNull;
+import tech.funkyra.alkocity.protos.CommandsOuterClass.TpReq;
+import tech.funkyra.alkocity.protos.InformationOuterClass.GetWarpSrvResp;
+import tech.funkyra.alkocity.protos.InformationOuterClass.GetWarpSrvReq;
+
+import static tech.funkyra.alkocity.Connection.cmds;
+import static tech.funkyra.alkocity.Connection.inf;
 
 /**
  * Represents a player that is connected to the proxy.
@@ -684,12 +691,48 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     Component disconnectReason = disconnect.getReason().getComponent();
     String plainTextReason = PASS_THRU_TRANSLATE.serialize(disconnectReason);
     if (connectedServer != null && connectedServer.getServerInfo().equals(server.getServerInfo())) {
-      logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
-          plainTextReason);
-      handleConnectionException(server, disconnectReason,
-          Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
-              Component.text(server.getServerInfo().getName()),
-              disconnectReason), safe);
+      String serverName = server.getServerInfo().getName();
+      if (!(serverName.startsWith("spawn") || serverName.startsWith("mining"))) {
+        try {
+          GetWarpSrvResp spawn = inf.getWarpSrv(GetWarpSrvReq.newBuilder().setSender("").setName("spawn").build()).get();
+          boolean init = cmds.tp(TpReq.newBuilder()
+              .setSender(this.getGameProfile().getId().toString())
+              .setMachine(spawn.getMachine())
+              .setCords(spawn.getCords())
+              .setDimId(spawn.getDimId())
+              .setPitch(spawn.getPitch())
+              .setYaw(spawn.getYaw())
+              .setWorldMost(spawn.getWorldMost())
+              .setWorldLeast(spawn.getWorldLeast())
+              .build()).get().isInitialized();
+
+          if (init) {
+            logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
+                plainTextReason);
+            handleConnectionException(server, disconnectReason,
+                Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
+                    Component.text(server.getServerInfo().getName()),
+                    disconnectReason), safe);
+          } else {
+            logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
+                plainTextReason);
+            handleConnectionException(server, disconnectReason,
+                Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
+                    Component.text(server.getServerInfo().getName()),
+                    disconnectReason), safe);
+          }
+        } catch (InterruptedException | ExecutionException e) {
+          throw new RuntimeException(e);
+        }
+      } else {
+        logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
+            plainTextReason);
+
+        handleConnectionException(server, disconnectReason,
+            Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
+                Component.text(server.getServerInfo().getName()),
+                disconnectReason), safe);
+      }
     } else {
       logger.error("{}: disconnected while connecting to {}: {}", this,
           server.getServerInfo().getName(), plainTextReason);

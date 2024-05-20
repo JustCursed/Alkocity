@@ -1,0 +1,73 @@
+syntax = "proto3";
+package information;
+
+option java_package = "tech.funkyra.alkocity.protos";
+
+service Information {
+	rpc GetHomeSrv (GetHomeSrvReq) returns (GetHomeSrvResp);
+	rpc GetWarpSrv (GetWarpSrvReq) returns (GetWarpSrvResp);
+	rpc GetOptimal (OptimalReq) returns (OptimalResp);
+	rpc UpdateStat (UpdateReq) returns (UpdateResp);
+	rpc Visit (VisitReq) returns (VisitResp);
+}
+
+message GetHomeSrvReq {
+	string sender = 1;
+}
+
+message GetHomeSrvResp {
+	string srv       = 1;
+	string cords     = 2;
+	uint32 machine   = 3;
+	int32 dimId      = 4;
+	float pitch      = 5;
+	float yaw        = 6;
+	int64 worldMost  = 7;
+	int64 worldLeast = 8;
+}
+
+message GetWarpSrvReq {
+	bool operator = 1;
+	string sender = 2;
+	string name   = 3;
+}
+
+message GetWarpSrvResp {
+	string srv       = 2;
+	string cords     = 3;
+	uint32 machine   = 4;
+	int32 dimId      = 5;
+	float pitch      = 6;
+	float yaw        = 7;
+	int64 worldMost  = 8;
+	int64 worldLeast = 9;
+}
+
+message VisitReq {
+	string warp = 1;
+}
+
+message VisitResp {}
+
+// collect server status information
+message UpdateReq {
+	string server           = 1;
+	uint32 players          = 2;
+	uint32 tps              = 3;
+	optional bool active    = 4;
+	optional bool reserve   = 5;
+	optional uint32 machine = 6;
+}
+
+message UpdateResp {}
+// =========================================
+
+// optimal server for home
+message OptimalReq {
+	string uuid = 1;
+}
+
+message OptimalResp {
+	string srvNum = 1;
+}
+// =========================================
