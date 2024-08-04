@@ -99,10 +99,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
+
 import net.kyori.adventure.audience.MessageType;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.identity.Identity;
@@ -125,12 +123,6 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.NotNull;
-import tech.funkyra.alkocity.protos.CommandsOuterClass.TpReq;
-import tech.funkyra.alkocity.protos.InformationOuterClass.GetWarpSrvResp;
-import tech.funkyra.alkocity.protos.InformationOuterClass.GetWarpSrvReq;
-
-import static tech.funkyra.alkocity.Connection.cmds;
-import static tech.funkyra.alkocity.Connection.inf;
 
 /**
  * Represents a player that is connected to the proxy.
@@ -691,48 +683,12 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
     Component disconnectReason = disconnect.getReason().getComponent();
     String plainTextReason = PASS_THRU_TRANSLATE.serialize(disconnectReason);
     if (connectedServer != null && connectedServer.getServerInfo().equals(server.getServerInfo())) {
-      String serverName = server.getServerInfo().getName();
-      if (!(serverName.startsWith("spawn") || serverName.startsWith("mining"))) {
-        try {
-          GetWarpSrvResp spawn = inf.getWarpSrv(GetWarpSrvReq.newBuilder().setSender("").setName("spawn").build()).get();
-          boolean err = cmds.tp(TpReq.newBuilder()
-              .setSender(this.getGameProfile().getId().toString())
-              .setMachine(spawn.getMachine())
-              .setCords(spawn.getCords())
-              .setDimId(spawn.getDimId())
-              .setPitch(spawn.getPitch())
-              .setYaw(spawn.getYaw())
-              .setWorldMost(spawn.getWorldMost())
-              .setWorldLeast(spawn.getWorldLeast())
-              .build()).get().getError();
-
-          if (err) {
-            logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
-                plainTextReason);
-            handleConnectionException(server, disconnectReason,
-                Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
-                    Component.text(server.getServerInfo().getName()),
-                    disconnectReason), safe);
-          } else {
-            logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
-                plainTextReason);
-            handleConnectionException(server, disconnectReason,
-                Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
-                    Component.text(server.getServerInfo().getName()),
-                    disconnectReason), safe);
-          }
-        } catch (InterruptedException | ExecutionException e) {
-          throw new RuntimeException(e);
-        }
-      } else {
         logger.info("{}: kicked from server {}: {}", this, server.getServerInfo().getName(),
             plainTextReason);
-
         handleConnectionException(server, disconnectReason,
             Component.translatable("velocity.error.moved-to-new-server", NamedTextColor.RED,
                 Component.text(server.getServerInfo().getName()),
                 disconnectReason), safe);
-      }
     } else {
       logger.error("{}: disconnected while connecting to {}: {}", this,
           server.getServerInfo().getName(), plainTextReason);
@@ -797,51 +753,51 @@ public class ConnectedPlayer implements MinecraftConnectionAssociation, Player, 
       if (event.getResult() instanceof final DisconnectPlayer res) {
         disconnect(res.getReasonComponent());
       } else if (event.getResult() instanceof final RedirectPlayer res) {
-        createConnectionRequest(res.getServer(), previousConnection).connect()
-            .whenCompleteAsync((status, throwable) -> {
-              if (throwable != null) {
-                handleConnectionException(
-                    status != null ? status.getAttemptedConnection() : res.getServer(), throwable,
-                    true);
-                return;
-              }
+          createConnectionRequest(res.getServer(), previousConnection).connect()
+              .whenCompleteAsync((status, throwable) -> {
+                if (throwable != null) {
+                  handleConnectionException(
+                      status != null ? status.getAttemptedConnection() : res.getServer(), throwable,
+                      true);
+                  return;
+                }
 
-              switch (status.getStatus()) {
-                // Impossible/nonsensical cases
-                case ALREADY_CONNECTED:
-                  logger.error("{}: already connected to {}", this,
-                      status.getAttemptedConnection().getServerInfo().getName());
-                  break;
-                case CONNECTION_IN_PROGRESS:
-                  // Fatal case
-                case CONNECTION_CANCELLED:
-                  Component fallbackMsg = res.getMessageComponent();
-                  if (fallbackMsg == null) {
-                    fallbackMsg = friendlyReason;
-                  }
-                  disconnect(status.getReasonComponent().orElse(fallbackMsg));
-                  break;
-                case SERVER_DISCONNECTED:
-                  Component reason = status.getReasonComponent()
-                      .orElse(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR);
-                  handleConnectionException(res.getServer(),
-                      DisconnectPacket.create(reason, getProtocolVersion(), connection.getState()),
-                      ((Impl) status).isSafe());
-                  break;
-                case SUCCESS:
-                  Component requestedMessage = res.getMessageComponent();
-                  if (requestedMessage == null) {
-                    requestedMessage = friendlyReason;
-                  }
-                  if (requestedMessage != Component.empty()) {
-                    sendMessage(requestedMessage);
-                  }
-                  break;
-                default:
-                  // The only remaining value is successful (no need to do anything!)
-                  break;
-              }
-            }, connection.eventLoop());
+                switch (status.getStatus()) {
+                  // Impossible/nonsensical cases
+                  case ALREADY_CONNECTED:
+                    logger.error("{}: already connected to {}", this,
+                        status.getAttemptedConnection().getServerInfo().getName());
+                    break;
+                  case CONNECTION_IN_PROGRESS:
+                    // Fatal case
+                  case CONNECTION_CANCELLED:
+                    Component fallbackMsg = res.getMessageComponent();
+                    if (fallbackMsg == null) {
+                      fallbackMsg = friendlyReason;
+                    }
+                    disconnect(status.getReasonComponent().orElse(fallbackMsg));
+                    break;
+                  case SERVER_DISCONNECTED:
+                    Component reason = status.getReasonComponent()
+                        .orElse(ConnectionMessages.INTERNAL_SERVER_CONNECTION_ERROR);
+                    handleConnectionException(res.getServer(),
+                        DisconnectPacket.create(reason, getProtocolVersion(), connection.getState()),
+                        ((Impl) status).isSafe());
+                    break;
+                  case SUCCESS:
+                    Component requestedMessage = res.getMessageComponent();
+                    if (requestedMessage == null) {
+                      requestedMessage = friendlyReason;
+                    }
+                    if (requestedMessage != Component.empty()) {
+                      sendMessage(requestedMessage);
+                    }
+                    break;
+                  default:
+                    // The only remaining value is successful (no need to do anything!)
+                    break;
+                }
+              }, connection.eventLoop());
       } else if (event.getResult() instanceof final Notify res) {
         if (event.kickedDuringServerConnect() && previousConnection != null) {
           sendMessage(Identity.nil(), res.getMessageComponent());
